@@ -1,18 +1,12 @@
-use std::{num::ParseFloatError, ptr};
+use std::{num::{ParseFloatError}, ptr};
 
 use cssparser::{Color, Parser, ParserInput, RGBA};
 use nom::{
-  branch::alt,
-  bytes::complete::{tag, take_till, take_until},
-  character::{complete::char, is_alphabetic},
-  combinator::map_res,
-  error::Error,
-  number::complete::float,
-  Err, IResult,
+  branch::alt, bytes::complete::{tag, take_till, take_until}, character::{complete::char, is_alphabetic}, combinator::map_res, error::Error, number::complete::float, Err, IResult
 };
 use thiserror::Error;
 
-use crate::sk::{degrees_to_radians, ImageFilter};
+use crate::sk::{degrees_to_radians, ImageFilter, TileMode};
 
 #[derive(Error, Debug)]
 pub enum ParseFilterError<'a> {
@@ -22,6 +16,8 @@ pub enum ParseFilterError<'a> {
   ParseFloatError(ParseFloatError),
   #[error("[`{0}`] is not valid unit")]
   UnitParseError(&'a str),
+  #[error("[`{0}`] is not a valid tile mode")]
+  TileModeParseError(&'a str),
 }
 
 impl<'a> From<Err<Error<&'a str>>> for ParseFilterError<'a> {
@@ -38,7 +34,7 @@ impl<'a> From<ParseFloatError> for ParseFilterError<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum CssFilter {
-  Blur(f32),
+  Blur((TileMode, f32)),
   Brightness(f32),
   Contrast(f32),
   DropShadow(f32, f32, f32, RGBA),
@@ -93,9 +89,30 @@ fn pixel(input: &str) -> Result<f32, ParseFilterError> {
   Ok(size_px)
 }
 
+fn tile_mode(input: &str) -> Result<TileMode, ParseFilterError> { 
+  let (_, tile_mode_name) = take_till(|c| c == ' ')(input)?;
+
+  let tile_mode = match tile_mode_name.trim() {
+    "clamp" => TileMode::Clamp,
+    "repeat" => TileMode::Repeat,
+    "mirror" => TileMode::Mirror,
+    "decal" => TileMode::Decal,
+    _ => {
+      return Err(ParseFilterError::TileModeParseError(tile_mode_name));
+    }
+  };
+
+  Ok(tile_mode)
+}
+
 #[inline(always)]
 fn pixel_in_tuple(input: &str) -> IResult<&str, f32> {
   map_res(take_until(")"), pixel)(input)
+}
+
+#[inline(always)]
+fn tile_mode_in_tuple(input: &str) -> IResult<&str, TileMode> {
+  map_res(take_until(" "), tile_mode)(input)
 }
 
 fn number_percentage(input: &str) -> IResult<&str, f32> {
@@ -186,9 +203,12 @@ percentage_parser!(sepia_parser, "sepia(", Sepia);
 fn blur_parser(input: &str) -> IResult<&str, CssFilter> {
   let (blurred_input, _) = tag("blur(")(input)?;
 
-  let (blurred_input, pixel) = pixel_in_tuple(blurred_input)?;
+  let blurred_input = blurred_input.trim();
+  let (blurred_input, tile_mode) = tile_mode_in_tuple(blurred_input).unwrap_or((blurred_input, TileMode::Decal));
+  let (blurred_input, blur) = pixel_in_tuple(blurred_input)?;
+
   let (finished_input, _) = char(')')(blurred_input)?;
-  Ok((finished_input.trim(), CssFilter::Blur(pixel)))
+  Ok((finished_input.trim(), CssFilter::Blur((tile_mode, blur))))
 }
 
 #[allow(clippy::unnecessary_lazy_evaluations)]
@@ -264,7 +284,7 @@ pub(crate) fn css_filters_to_image_filter(filters: Vec<CssFilter>) -> Option<Ima
   filters
     .into_iter()
     .try_fold(ImageFilter(ptr::null_mut()), |image_filter, f| match f {
-      CssFilter::Blur(blur) => ImageFilter::make_blur(blur, blur, Some(&image_filter)),
+      CssFilter::Blur((tile_mode, blur)) => ImageFilter::make_blur(blur, blur, tile_mode, Some(&image_filter)),
       CssFilter::Brightness(brightness) => {
         let brightness = brightness.max(0.0);
         ImageFilter::make_image_filter(
