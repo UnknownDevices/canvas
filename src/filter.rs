@@ -439,20 +439,28 @@ fn parse_empty() {
 fn parse_blur() {
   assert_eq!(
     css_filter("blur(20px)"),
-    Ok(("", vec![CssFilter::Blur(20.0)]))
+    Ok(("", vec![CssFilter::Blur((TileMode::Decal, 20.0))]))
   );
-  assert_eq!(css_filter("blur(0)"), Ok(("", vec![CssFilter::Blur(0.0)])));
+  assert_eq!(css_filter("blur(0)"), Ok(("", vec![CssFilter::Blur((TileMode::Decal, 0.0))])));
   assert_eq!(
     css_filter("blur(1.5rem)"),
-    Ok(("", vec![CssFilter::Blur(24.0)]))
+    Ok(("", vec![CssFilter::Blur((TileMode::Decal, 24.0))]))
   );
   assert_eq!(
     css_filter("blur(20 px)"),
-    Ok(("", vec![CssFilter::Blur(20.0)]))
+    Ok(("", vec![CssFilter::Blur((TileMode::Decal, 20.0))]))
   );
   assert_eq!(
     css_filter("blur( 20 px )"),
-    Ok(("", vec![CssFilter::Blur(20.0)]))
+    Ok(("", vec![CssFilter::Blur((TileMode::Decal, 20.0))]))
+  );
+  assert_eq!(
+    css_filter("blur(clamp 20px)"), 
+    Ok(("", vec![CssFilter::Blur((TileMode::Clamp, 20.0))]))
+  );
+  assert_eq!(
+    css_filter("blur( clamp 20 px )"), 
+    Ok(("", vec![CssFilter::Blur((TileMode::Clamp, 20.0))]))
   );
 }
 
@@ -493,52 +501,52 @@ fn drop_shadow_parse() {
 #[test]
 fn composite_parse() {
   assert_eq!(
-    css_filter("blur(1.5rem) brightness(2)"),
+    css_filter("blur(mirror 1.5rem) brightness(2)"),
     Ok((
       "",
-      vec![CssFilter::Blur(24.0), CssFilter::Brightness(2.0f32)]
+      vec![CssFilter::Blur((TileMode::Mirror, 24.0)), CssFilter::Brightness(2.0f32)]
     ))
   );
 
   assert_eq!(
-    css_filter("brightness(2) blur(1.5rem)"),
+    css_filter("brightness(2) blur(mirror 1.5rem)"),
     Ok((
       "",
-      vec![CssFilter::Brightness(2.0f32), CssFilter::Blur(24.0)]
+      vec![CssFilter::Brightness(2.0f32), CssFilter::Blur((TileMode::Mirror, 24.0))]
     ))
   );
 
   assert_eq!(
-    css_filter("drop-shadow(2px 2px 5px rgba(47, 20, 223, 255)) brightness(2) blur(1.5rem)"),
+    css_filter("drop-shadow(2px 2px 5px rgba(47, 20, 223, 255)) brightness(2) blur(mirror 1.5rem)"),
     Ok((
       "",
       vec![
         CssFilter::DropShadow(2.0f32, 2.0f32, 5.0f32, RGBA::new(47, 20, 223, 255)),
         CssFilter::Brightness(2.0f32),
-        CssFilter::Blur(24.0)
+        CssFilter::Blur((TileMode::Mirror, 24.0))
       ]
     ))
   );
 
   assert_eq!(
-    css_filter("brightness(2) drop-shadow(2px 2px 5px rgba(47, 20, 223, 255)) blur(1.5rem)"),
+    css_filter("brightness(2) drop-shadow(2px 2px 5px rgba(47, 20, 223, 255)) blur(mirror 1.5rem)"),
     Ok((
       "",
       vec![
         CssFilter::Brightness(2.0f32),
         CssFilter::DropShadow(2.0f32, 2.0f32, 5.0f32, RGBA::new(47, 20, 223, 255)),
-        CssFilter::Blur(24.0)
+        CssFilter::Blur((TileMode::Mirror, 24.0))
       ]
     ))
   );
 
   assert_eq!(
-    css_filter("brightness(2) blur(1.5rem) drop-shadow(2px 2px 5px rgba(47, 20, 223, 255))"),
+    css_filter("brightness(2) blur(mirror 1.5rem) drop-shadow(2px 2px 5px rgba(47, 20, 223, 255))"),
     Ok((
       "",
       vec![
         CssFilter::Brightness(2.0f32),
-        CssFilter::Blur(24.0),
+        CssFilter::Blur((TileMode::Mirror, 24.0)),
         CssFilter::DropShadow(2.0f32, 2.0f32, 5.0f32, RGBA::new(47, 20, 223, 255)),
       ]
     ))
